@@ -6,7 +6,7 @@ This is a port of [Sebastian Aaltonen's `OffsetAllocator`] package for C++ to 10
 
 The port has been made into more or less idiomatic Rust but is otherwise mostly line-for-line, preserving comments. That way, patches for the original `OffsetAllocator` should be readily transferable to this Rust port.
 
-Please note that `offset-allocator` isn't a Rust allocator conforming to the `GlobalAlloc` trait. You can't use this crate as a drop-in replacement for the system allocator, `jemalloc`, `wee_alloc`, etc. A Rust allocator could be built out of this crate, but it doesn't come with one. This is by design, so that this allocator can be used to manage resources that aren't just CPU memory: in particular, you can manage allocations inside GPU buffers with it. By contrast, Rust allocators are hard-wired to the CPU and can't be used to manage GPU resources.
+Please note that `offset-allocator` isn't a Rust allocator conforming to the `GlobalAlloc` trait. You can't use this crate as a drop-in replacement for the system allocator, `jemalloc`, `wee_alloc`, etc. The general algorithm that this crate uses could be adapted to construct a Rust allocator, but that's beyond the scope of this particular implementation. This is by design, so that this allocator can be used to manage resources that aren't just CPU memory: in particular, you can manage allocations inside GPU buffers with it. By contrast, Rust allocators are hard-wired to the CPU and can't be used to manage GPU resources.
 
 ## Description
 
