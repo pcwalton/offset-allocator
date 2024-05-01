@@ -121,3 +121,85 @@ fn allocate_offset_allocator_simple() {
     assert_eq!(validate_all.offset, 0);
     allocator.free(validate_all);
 }
+
+#[test]
+fn allocate_offset_allocator_merge_trivial() {
+    let mut allocator: Allocator<u32> = Allocator::new(1024 * 1024 * 256);
+
+    // Free merges neighbor empty nodes. Next allocation should also have offset = 0
+    let a = allocator.allocate(1337).unwrap();
+    assert_eq!(a.offset, 0);
+    allocator.free(a);
+
+    let b = allocator.allocate(1337).unwrap();
+    assert_eq!(b.offset, 0);
+    allocator.free(b);
+
+    // End: Validate that allocator has no fragmentation left. Should be 100% clean.
+    let validate_all = allocator.allocate(1024 * 1024 * 256).unwrap();
+    assert_eq!(validate_all.offset, 0);
+    allocator.free(validate_all);
+}
+
+#[test]
+fn allocate_offset_allocator_reuse_trivial() {
+    let mut allocator: Allocator<u32> = Allocator::new(1024 * 1024 * 256);
+
+    // Allocator should reuse node freed by A since the allocation C fits in the same bin (using pow2 size to be sure)
+    let a = allocator.allocate(1024).unwrap();
+    assert_eq!(a.offset, 0);
+
+    let b = allocator.allocate(3456).unwrap();
+    assert_eq!(b.offset, 1024);
+
+    allocator.free(a);
+
+    let c = allocator.allocate(1024).unwrap();
+    assert_eq!(c.offset, 0);
+
+    allocator.free(c);
+    allocator.free(b);
+
+    // End: Validate that allocator has no fragmentation left. Should be 100% clean.
+    let validate_all = allocator.allocate(1024 * 1024 * 256).unwrap();
+    assert_eq!(validate_all.offset, 0);
+    allocator.free(validate_all);
+}
+
+#[test]
+fn allocate_offset_allocator_reuse_complex() {
+    let mut allocator: Allocator<u32> = Allocator::new(1024 * 1024 * 256);
+
+    // Allocator should not reuse node freed by A since the allocation C doesn't fits in the same bin
+    // However node D and E fit there and should reuse node from A
+    let a = allocator.allocate(1024).unwrap();
+    assert_eq!(a.offset, 0);
+
+    let b = allocator.allocate(3456).unwrap();
+    assert_eq!(b.offset, 1024);
+
+    allocator.free(a);
+
+    let c = allocator.allocate(2345).unwrap();
+    assert_eq!(c.offset, 1024 + 3456);
+
+    let d = allocator.allocate(456).unwrap();
+    assert_eq!(d.offset, 0);
+
+    let e = allocator.allocate(512).unwrap();
+    assert_eq!(e.offset, 456);
+
+    let report = allocator.storage_report();
+    assert_eq!(report.total_free_space, 1024 * 1024 * 256 - 3456 - 2345 - 456 - 512);
+    assert_ne!(report.largest_free_region, report.total_free_space);
+
+    allocator.free(c);
+    allocator.free(d);
+    allocator.free(b);
+    allocator.free(e);
+
+    // End: Validate that allocator has no fragmentation left. Should be 100% clean.
+    let validate_all = allocator.allocate(1024 * 1024 * 256).unwrap();
+    assert_eq!(validate_all.offset, 0);
+    allocator.free(validate_all);
+}
