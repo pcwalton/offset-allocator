@@ -57,6 +57,7 @@ where
 }
 
 /// A single allocation.
+#[derive(Clone, Copy)]
 pub struct Allocation<NI = u32>
 where
     NI: NodeIndex,

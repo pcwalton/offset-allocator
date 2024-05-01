@@ -1,5 +1,7 @@
 // offset-allocator/src/tests.rs
 
+use std::array;
+
 use crate::{small_float, Allocator};
 
 #[test]
@@ -197,6 +199,56 @@ fn allocate_offset_allocator_reuse_complex() {
     allocator.free(d);
     allocator.free(b);
     allocator.free(e);
+
+    // End: Validate that allocator has no fragmentation left. Should be 100% clean.
+    let validate_all = allocator.allocate(1024 * 1024 * 256).unwrap();
+    assert_eq!(validate_all.offset, 0);
+    allocator.free(validate_all);
+}
+
+#[test]
+fn allocate_offset_allocator_zero_fragmentation() {
+    let mut allocator: Allocator<u32> = Allocator::new(1024 * 1024 * 256);
+
+            // Allocate 256x 1MB. Should fit. Then free four random slots and reallocate four slots.
+            // Plus free four contiguous slots an allocate 4x larger slot. All must be zero fragmentation!
+    let mut allocations: [_; 256] = array::from_fn(|i| {
+        let allocation = allocator.allocate(1024 * 1024).unwrap();
+        assert_eq!(allocation.offset, i as u32 * 1024 * 1024);
+        allocation
+    });
+
+    let report = allocator.storage_report();
+    assert_eq!(report.total_free_space, 0);
+    assert_eq!(report.largest_free_region, 0);
+
+    // Free four random slots
+    allocator.free(allocations[243]);
+    allocator.free(allocations[5]);
+    allocator.free(allocations[123]);
+    allocator.free(allocations[95]);
+
+    // Free four contiguous slots (allocator must merge)
+    allocator.free(allocations[151]);
+    allocator.free(allocations[152]);
+    allocator.free(allocations[153]);
+    allocator.free(allocations[154]);
+
+    allocations[243] = allocator.allocate(1024 * 1024).unwrap();
+    allocations[5] = allocator.allocate(1024 * 1024).unwrap();
+    allocations[123] = allocator.allocate(1024 * 1024).unwrap();
+    allocations[95] = allocator.allocate(1024 * 1024).unwrap();
+    allocations[151] = allocator.allocate(1024 * 1024 * 4).unwrap();    // 4x larger
+
+    for (i, allocation) in allocations.iter().enumerate() {
+        if !(152..155).contains(&i) {
+            allocator.free(*allocation);
+        }
+    }
+
+    let report2 = allocator.storage_report();
+    assert_eq!(report2.total_free_space, 1024 * 1024 * 256);
+    assert_eq!(report2.largest_free_region, 1024 * 1024 * 256);
 
     // End: Validate that allocator has no fragmentation left. Should be 100% clean.
     let validate_all = allocator.allocate(1024 * 1024 * 256).unwrap();
