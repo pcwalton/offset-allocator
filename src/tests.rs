@@ -192,7 +192,10 @@ fn allocate_offset_allocator_reuse_complex() {
     assert_eq!(e.offset, 456);
 
     let report = allocator.storage_report();
-    assert_eq!(report.total_free_space, 1024 * 1024 * 256 - 3456 - 2345 - 456 - 512);
+    assert_eq!(
+        report.total_free_space,
+        1024 * 1024 * 256 - 3456 - 2345 - 456 - 512
+    );
     assert_ne!(report.largest_free_region, report.total_free_space);
 
     allocator.free(c);
@@ -210,8 +213,8 @@ fn allocate_offset_allocator_reuse_complex() {
 fn allocate_offset_allocator_zero_fragmentation() {
     let mut allocator: Allocator<u32> = Allocator::new(1024 * 1024 * 256);
 
-            // Allocate 256x 1MB. Should fit. Then free four random slots and reallocate four slots.
-            // Plus free four contiguous slots an allocate 4x larger slot. All must be zero fragmentation!
+    // Allocate 256x 1MB. Should fit. Then free four random slots and reallocate four slots.
+    // Plus free four contiguous slots an allocate 4x larger slot. All must be zero fragmentation!
     let mut allocations: [_; 256] = array::from_fn(|i| {
         let allocation = allocator.allocate(1024 * 1024).unwrap();
         assert_eq!(allocation.offset, i as u32 * 1024 * 1024);
@@ -238,7 +241,7 @@ fn allocate_offset_allocator_zero_fragmentation() {
     allocations[5] = allocator.allocate(1024 * 1024).unwrap();
     allocations[123] = allocator.allocate(1024 * 1024).unwrap();
     allocations[95] = allocator.allocate(1024 * 1024).unwrap();
-    allocations[151] = allocator.allocate(1024 * 1024 * 4).unwrap();    // 4x larger
+    allocations[151] = allocator.allocate(1024 * 1024 * 4).unwrap(); // 4x larger
 
     for (i, allocation) in allocations.iter().enumerate() {
         if !(152..155).contains(&i) {

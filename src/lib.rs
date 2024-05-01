@@ -499,7 +499,8 @@ where
             free_storage = self.free_storage;
             if self.used_bins_top > 0 {
                 let top_bin_index = 31 - self.used_bins_top.leading_zeros();
-                let leaf_bin_index = 31 - (self.used_bins[top_bin_index as usize] as u32).leading_zeros();
+                let leaf_bin_index =
+                    31 - (self.used_bins[top_bin_index as usize] as u32).leading_zeros();
                 largest_free_region = small_float::float_to_uint(
                     (top_bin_index << TOP_BINS_INDEX_SHIFT) | leaf_bin_index,
                 );
