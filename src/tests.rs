@@ -1,6 +1,6 @@
 // offset-allocator/src/tests.rs
 
-use crate::small_float;
+use crate::{small_float, Allocator};
 
 #[test]
 fn small_float_uint_to_float() {
@@ -83,4 +83,13 @@ fn small_float_float_to_uint() {
         assert_eq!(i, round_up);
         assert_eq!(i, round_down);
     }
+}
+
+#[test]
+fn basic_offset_allocator() {
+    let mut allocator = Allocator::new(1024 * 1024 * 256);
+    let a = allocator.allocate(1337).unwrap();
+    let offset: u32 = a.offset;
+    assert_eq!(offset, 0);
+    allocator.free(a);
 }

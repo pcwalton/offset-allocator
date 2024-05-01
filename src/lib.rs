@@ -116,8 +116,12 @@ impl<NI> Allocator<NI>
 where
     NI: NodeIndex,
 {
+    pub fn new(size: u32) -> Self {
+        Allocator::with_max_allocs(size, u32::min(128 * 1024, NI::MAX - 1))
+    }
+
     // Allocator…
-    pub fn new(size: u32, max_allocs: u32) -> Self {
+    pub fn with_max_allocs(size: u32, max_allocs: u32) -> Self {
         assert!(max_allocs < NI::MAX - 1);
 
         let mut this = Self {
