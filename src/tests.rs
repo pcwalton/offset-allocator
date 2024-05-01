@@ -93,3 +93,31 @@ fn basic_offset_allocator() {
     assert_eq!(offset, 0);
     allocator.free(a);
 }
+
+#[test]
+fn allocate_offset_allocator_simple() {
+    let mut allocator: Allocator<u32> = Allocator::new(1024 * 1024 * 256);
+
+    // Free merges neighbor empty nodes. Next allocation should also have offset = 0
+    let a = allocator.allocate(0).unwrap();
+    assert_eq!(a.offset, 0);
+
+    let b = allocator.allocate(1).unwrap();
+    assert_eq!(b.offset, 0);
+
+    let c = allocator.allocate(123).unwrap();
+    assert_eq!(c.offset, 1);
+
+    let d = allocator.allocate(1234).unwrap();
+    assert_eq!(d.offset, 124);
+
+    allocator.free(a);
+    allocator.free(b);
+    allocator.free(c);
+    allocator.free(d);
+
+    // End: Validate that allocator has no fragmentation left. Should be 100% clean.
+    let validate_all = allocator.allocate(1024 * 1024 * 256).unwrap();
+    assert_eq!(validate_all.offset, 0);
+    allocator.free(validate_all);
+}
