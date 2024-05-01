@@ -2,6 +2,7 @@
 
 #![doc = include_str!("../README.md")]
 #![deny(unsafe_code)]
+#![warn(missing_docs)]
 
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
@@ -26,14 +27,26 @@ const NUM_LEAF_BINS: usize = NUM_TOP_BINS * BINS_PER_LEAF;
 /// causes the allocator to use less memory but limits the number of allocations
 /// within a single allocator to at most 65,534.
 pub trait NodeIndex: Clone + Copy + Default {
+    /// The `NonMax` version of this type.
+    ///
+    /// This is used extensively to optimize `enum` representations.
     type NonMax: NodeIndexNonMax + TryFrom<Self> + Into<Self>;
+
+    /// The maximum value representable in this type.
     const MAX: u32;
 
+    /// Converts from a unsigned 32-bit integer to an instance of this type.
     fn from_u32(val: u32) -> Self;
+
+    /// Converts this type to an unsigned machine word.
     fn to_usize(self) -> usize;
 }
 
+/// The `NonMax` version of the [`NodeIndex`].
+///
+/// For example, for `u32`, the `NonMax` version is [`NonMaxU32`].
 pub trait NodeIndexNonMax: Clone + Copy + PartialEq + Default + Debug + Display {
+    /// Converts this type to an unsigned machine word.
     fn to_usize(self) -> usize;
 }
 
@@ -77,13 +90,19 @@ pub struct StorageReport {
     pub largest_free_region: u32,
 }
 
+/// Provides a detailed accounting of each bin within the allocator.
+#[derive(Debug)]
 pub struct StorageReportFull {
+    /// Each bin within the allocator.
     pub free_regions: [StorageReportFullRegion; NUM_LEAF_BINS],
 }
 
-#[derive(Clone, Copy, Default)]
+/// A detailed accounting of each allocator bin.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StorageReportFullRegion {
+    /// The size of the bin, in units.
     pub size: u32,
+    /// The number of allocations in the bin.
     pub count: u32,
 }
 
@@ -117,11 +136,18 @@ impl<NI> Allocator<NI>
 where
     NI: NodeIndex,
 {
+    /// Creates a new allocator, managing a contiguous block of memory of `size`
+    /// units, with a default reasonable number of maximum allocations.
     pub fn new(size: u32) -> Self {
         Allocator::with_max_allocs(size, u32::min(128 * 1024, NI::MAX - 1))
     }
 
-    // Allocator…
+    /// Creates a new allocator, managing a contiguous block of memory of `size`
+    /// units, with the given number of maximum allocations.
+    ///
+    /// Note that the maximum number of allocations must be less than
+    /// [`NodeIndex::MAX`] minus one. If this restriction is violated, this
+    /// constructor will panic.
     pub fn with_max_allocs(size: u32, max_allocs: u32) -> Self {
         assert!(max_allocs < NI::MAX - 1);
 
@@ -268,6 +294,12 @@ where
         })
     }
 
+    /// Frees an allocation, returning the data to the heap.
+    ///
+    /// If the allocation has already been freed, the behavior is unspecified.
+    /// It may or may not panic. Note that, because this crate contains no
+    /// unsafe code, the memory safe of the allocator *itself* will be
+    /// uncompromised, even on double free.
     pub fn free(&mut self, allocation: Allocation<NI>) {
         let node_index = allocation.metadata;
 
@@ -445,6 +477,10 @@ where
         );
     }
 
+    /// Returns the *used* size of an allocation.
+    ///
+    /// Note that this may be larger than the size requested at allocation time,
+    /// due to rounding.
     pub fn allocation_size(&self, allocation: Allocation<NI>) -> u32 {
         self.nodes
             .get(allocation.metadata.to_usize())
@@ -452,6 +488,8 @@ where
             .unwrap_or_default()
     }
 
+    /// Returns a structure containing the amount of free space remaining, as
+    /// well as the largest amount that can be allocated at once.
     pub fn storage_report(&self) -> StorageReport {
         let mut largest_free_region = 0;
         let mut free_storage = 0;
@@ -475,6 +513,8 @@ where
         }
     }
 
+    /// Returns detailed information about the number of allocations in each
+    /// bin.
     pub fn storage_report_full(&self) -> StorageReportFull {
         let mut report = StorageReportFull::default();
         for i in 0..NUM_LEAF_BINS {
