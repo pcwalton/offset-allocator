@@ -1,5 +1,8 @@
 // offset-allocator/src/lib.rs
 
+#![doc = include_str!("../README.md")]
+#![deny(unsafe_code)]
+
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 use log::debug;
@@ -7,14 +10,24 @@ use nonmax::{NonMaxU16, NonMaxU32};
 
 mod small_float;
 
-pub const NUM_TOP_BINS: usize = 32;
-pub const BINS_PER_LEAF: usize = 8;
-pub const TOP_BINS_INDEX_SHIFT: u32 = 3;
-pub const LEAF_BINS_INDEX_MASK: u32 = 7;
-pub const NUM_LEAF_BINS: usize = NUM_TOP_BINS * BINS_PER_LEAF;
+#[cfg(test)]
+mod tests;
 
+const NUM_TOP_BINS: usize = 32;
+const BINS_PER_LEAF: usize = 8;
+const TOP_BINS_INDEX_SHIFT: u32 = 3;
+const LEAF_BINS_INDEX_MASK: u32 = 7;
+const NUM_LEAF_BINS: usize = NUM_TOP_BINS * BINS_PER_LEAF;
+
+/// Determines the number of allocations that the allocator supports.
+///
+/// By default, [`Allocator`] and related functions use `u32`, which allows for
+/// `u32::MAX - 1` allocations. You can, however, use `u16` instead, which
+/// causes the allocator to use less memory but limits the number of allocations
+/// within a single allocator to at most 65,534.
 pub trait NodeIndex: Clone + Copy + Default {
     type NonMax: NodeIndexNonMax + TryFrom<Self> + Into<Self>;
+    const MAX: u32;
 
     fn from_u32(val: u32) -> Self;
     fn to_usize(self) -> usize;
@@ -24,30 +37,8 @@ pub trait NodeIndexNonMax: Clone + Copy + PartialEq + Default + Debug + Display 
     fn to_usize(self) -> usize;
 }
 
-pub struct Allocation<NI = u32>
-where
-    NI: NodeIndex,
-{
-    pub offset: Option<NonMaxU32>,
-    pub metadata: Option<NI::NonMax>,
-}
-
-#[derive(Debug)]
-pub struct StorageReport {
-    pub total_free_space: u32,
-    pub largest_free_region: u32,
-}
-
-pub struct StorageReportFull {
-    pub free_regions: [StorageReportFullRegion; NUM_LEAF_BINS],
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct StorageReportFullRegion {
-    pub size: u32,
-    pub count: u32,
-}
-
+/// An allocator that manages a single contiguous chunk of space and hands out
+/// portions of it as requested.
 pub struct Allocator<NI = u32>
 where
     NI: NodeIndex,
@@ -65,6 +56,36 @@ where
     free_offset: u32,
 }
 
+/// A single allocation.
+pub struct Allocation<NI = u32>
+where
+    NI: NodeIndex,
+{
+    /// The location of this allocation within the buffer.
+    pub offset: NI,
+    /// The node index associated with this allocation.
+    metadata: NI::NonMax,
+}
+
+/// Provides a summary of the state of the allocator, including space remaining.
+#[derive(Debug)]
+pub struct StorageReport {
+    /// The amount of free space left.
+    pub total_free_space: u32,
+    /// The maximum potential size of a single contiguous allocation.
+    pub largest_free_region: u32,
+}
+
+pub struct StorageReportFull {
+    pub free_regions: [StorageReportFullRegion; NUM_LEAF_BINS],
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct StorageReportFullRegion {
+    pub size: u32,
+    pub count: u32,
+}
+
 #[derive(Clone, Copy, Default)]
 struct Node<NI = u32>
 where
@@ -80,7 +101,7 @@ where
 }
 
 // Utility functions
-pub fn find_lowest_bit_set_after(bit_mask: u32, start_bit_index: u32) -> Option<NonMaxU32> {
+fn find_lowest_bit_set_after(bit_mask: u32, start_bit_index: u32) -> Option<NonMaxU32> {
     let mask_before_start_index = (1 << start_bit_index) - 1;
     let mask_after_start_index = !mask_before_start_index;
     let bits_after = bit_mask & mask_after_start_index;
@@ -97,8 +118,7 @@ where
 {
     // Allocator…
     pub fn new(size: u32, max_allocs: u32) -> Self {
-        #[cfg(not(feature = "32_bit_node_indices"))]
-        assert!(max_allocs < u16::MAX as u32);
+        assert!(max_allocs < NI::MAX - 1);
 
         let mut this = Self {
             size,
@@ -115,6 +135,7 @@ where
         this
     }
 
+    /// Clears out all allocations.
     pub fn reset(&mut self) {
         self.free_storage = 0;
         self.used_bins_top = 0;
@@ -138,9 +159,11 @@ where
         self.insert_node_into_bin(self.size, 0);
     }
 
+    /// Allocates a block of `size` elements and returns its allocation.
+    ///
+    /// If there's not enough contiguous space for this allocation, returns
+    /// None.
     pub fn allocate(&mut self, size: u32) -> Option<Allocation<NI>> {
-        debug!("Allocator::allocate({})", size);
-
         // Out of allocations?
         if self.free_offset == 0 {
             return None;
@@ -149,7 +172,6 @@ where
         // Round up to bin index to ensure that alloc >= bin
         // Gives us min bin index that fits the size
         let min_bin_index = small_float::uint_to_float_round_up(size);
-        debug!("min_bin_index={}", min_bin_index);
 
         let min_top_bin_index = min_bin_index >> TOP_BINS_INDEX_SHIFT;
         let min_leaf_bin_index = min_bin_index & LEAF_BINS_INDEX_MASK;
@@ -169,7 +191,6 @@ where
         let leaf_bin_index = match leaf_bin_index {
             Some(leaf_bin_index) => leaf_bin_index,
             None => {
-                debug!("used_bins_top={:x}", self.used_bins_top);
                 top_bin_index =
                     find_lowest_bit_set_after(self.used_bins_top, min_top_bin_index + 1)?.into();
 
@@ -186,7 +207,6 @@ where
         let bin_index = (top_bin_index << TOP_BINS_INDEX_SHIFT) | u32::from(leaf_bin_index);
 
         // Pop the top node of the bin. Bin top = node.next.
-        debug!("bin_index = {}", bin_index);
         let node_index = self.bin_indices[bin_index as usize].unwrap();
         let node = &mut self.nodes[node_index.to_usize()];
         let node_total_size = node.data_size;
@@ -238,15 +258,13 @@ where
 
         let node = &mut self.nodes[node_index.to_usize()];
         Some(Allocation {
-            offset: NonMaxU32::try_from(node.data_offset).ok(),
-            metadata: Some(node_index),
+            offset: NI::from_u32(node.data_offset),
+            metadata: node_index,
         })
     }
 
     pub fn free(&mut self, allocation: Allocation<NI>) {
-        let Some(node_index) = allocation.metadata else {
-            panic!("Invalid allocation: no metadata");
-        };
+        let node_index = allocation.metadata;
 
         // Merge with neighbors…
         let Node {
@@ -424,9 +442,8 @@ where
     }
 
     pub fn allocation_size(&self, allocation: Allocation<NI>) -> u32 {
-        allocation
-            .metadata
-            .and_then(|metadata| self.nodes.get(metadata.to_usize()))
+        self.nodes
+            .get(allocation.metadata.to_usize())
             .map(|node| node.data_size)
             .unwrap_or_default()
     }
@@ -491,6 +508,7 @@ where
 
 impl NodeIndex for u32 {
     type NonMax = NonMaxU32;
+    const MAX: u32 = u32::MAX;
 
     fn from_u32(val: u32) -> Self {
         val
@@ -503,6 +521,7 @@ impl NodeIndex for u32 {
 
 impl NodeIndex for u16 {
     type NonMax = NonMaxU16;
+    const MAX: u32 = u16::MAX as u32;
 
     fn from_u32(val: u32) -> Self {
         val as u16
