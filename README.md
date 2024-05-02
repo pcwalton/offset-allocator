@@ -14,7 +14,8 @@ This allocator is completely agnostic to what it's allocating: it only knows
 about a contiguous block of memory of a specific size. That size need not be in
 bytes: this is especially useful when allocating inside a buffer of fixed-size
 structures. For example, if using this allocator to divide up a GPU index
-buffer object, one want to treat the units of allocation as 32-bit floats.
+buffer object, one might want to treat the units of allocation as 32-bit
+floats.
 
 From [the original README]:
 
