@@ -9,6 +9,8 @@ use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use log::debug;
 use nonmax::{NonMaxU16, NonMaxU32};
 
+pub mod ext;
+
 mod small_float;
 
 #[cfg(test)]

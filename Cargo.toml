@@ -1,6 +1,6 @@
 [package]
 name = "offset-allocator"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Patrick Walton <pcwalton@mimiga.net>"]
 description = "A port of Sebastian Aaltonen's `OffsetAllocator` to Rust"
