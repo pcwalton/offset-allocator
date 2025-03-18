@@ -1,10 +1,18 @@
 // offset-allocator/src/lib.rs
 
+#![no_std]
 #![doc = include_str!("../README.md")]
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
+extern crate alloc;
+
+#[cfg(test)]
+extern crate std;
+
+use alloc::vec;
+use alloc::vec::Vec;
+use core::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 use log::debug;
 use nonmax::{NonMaxU16, NonMaxU32};
