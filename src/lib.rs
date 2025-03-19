@@ -141,7 +141,7 @@ where
     /// Creates a new allocator, managing a contiguous block of memory of `size`
     /// units, with a default reasonable number of maximum allocations.
     pub fn new(size: u32) -> Self {
-        Allocator::with_max_allocs(size, u32::min(128 * 1024, NI::MAX - 1))
+        Allocator::with_max_allocs(size, u32::min(128 * 1024, NI::MAX - 2))
     }
 
     /// Creates a new allocator, managing a contiguous block of memory of `size`
